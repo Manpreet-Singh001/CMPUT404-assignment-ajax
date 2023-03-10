@@ -114,6 +114,11 @@ def world():
     '''you should probably return the world here'''
     if request.method == 'GET':
         return myWorld.world()
+    if request.method == 'POST':
+        data = flask_post_json()
+        for entity in data.keys():
+            myWorld.set(entity, {**data[entity]})
+        return myWorld.world()
 
 
 @app.route("/entity/<entity>")
