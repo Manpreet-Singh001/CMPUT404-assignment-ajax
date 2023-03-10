@@ -22,10 +22,12 @@
 
 
 import flask
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 import json
-app = Flask(__name__)
+
+app = Flask(__name__, static_folder="static", static_url_path="/static/")
 app.debug = True
+
 
 # An example world
 # {
@@ -33,12 +35,13 @@ app.debug = True
 #    'b':{'x':2, 'y':3}
 # }
 
+
 class World:
     def __init__(self):
         self.clear()
-        
+
     def update(self, entity, key, value):
-        entry = self.space.get(entity,dict())
+        entry = self.space.get(entity, dict())
         entry[key] = value
         self.space[entity] = entry
 
@@ -49,52 +52,82 @@ class World:
         self.space = dict()
 
     def get(self, entity):
-        return self.space.get(entity,dict())
-    
+        return self.space.get(entity, dict())
+
     def world(self):
         return self.space
+
 
 # you can test your webservice from the commandline
 # curl -v   -H "Content-Type: application/json" -X PUT http://127.0.0.1:5000/entity/X -d '{"x":1,"y":1}' 
 
-myWorld = World()          
+myWorld = World()
+
 
 # I give this to you, this is how you get the raw body/data portion of a post in flask
 # this should come with flask but whatever, it's not my project.
 def flask_post_json():
-    '''Ah the joys of frameworks! They do so much work for you
-       that they get in the way of sane operation!'''
-    if (request.json != None):
+    """Ah, the joys of frameworks! They do so much work for you
+       that they get in the way of sane operation!"""
+    if request.json is not None:
         return request.json
-    elif (request.data != None and request.data.decode("utf8") != u''):
+    elif request.data is not None and request.data.decode("utf8") != u'':
         return json.loads(request.data.decode("utf8"))
     else:
         return json.loads(request.form.keys()[0])
 
+
 @app.route("/")
 def hello():
     '''Return something coherent here.. perhaps redirect to /static/index.html '''
-    return None
+    return send_from_directory("static", "index.html")
 
-@app.route("/entity/<entity>", methods=['POST','PUT'])
+
+@app.route("/entity/<entity>", methods=['POST', 'PUT'])
 def update(entity):
     '''update the entities via this interface'''
-    return None
+    data = flask_post_json()
 
-@app.route("/world", methods=['POST','GET'])    
+    if data.get("x", None) is None and data.get("y", None) is None:
+        return {"message": "invalid fields"}, 400
+
+    if request.method == 'PUT':
+        if data.get("x", None) is None or data.get("y", None) is None:
+            return {"message": "invalid fields"}, 400
+        myWorld.set(entity, {"x": data["x"], "y": data["y"]})
+        if data.get("colour", None) is not None:
+            myWorld.update(entity, "colour", data["colour"])
+        return myWorld.get(entity)
+
+    if data.get("x", None) is not None:
+        myWorld.update(entity, "x", data.get("x"))
+    if data.get("y", None) is not None:
+        myWorld.update(entity, "y", data.get("y"))
+    if data.get("colour", None) is not None:
+        myWorld.update(entity, "colour", data.get("colour"))
+
+    return myWorld.get(entity)
+
+
+@app.route("/world", methods=['POST', 'GET'])
 def world():
     '''you should probably return the world here'''
-    return None
+    if request.method == 'GET':
+        return myWorld.world()
 
-@app.route("/entity/<entity>")    
+
+@app.route("/entity/<entity>")
 def get_entity(entity):
     '''This is the GET version of the entity interface, return a representation of the entity'''
-    return None
+    return myWorld.get(entity)
 
-@app.route("/clear", methods=['POST','GET'])
+
+@app.route("/clear", methods=['POST', 'GET'])
 def clear():
     '''Clear the world out!'''
-    return None
+    myWorld.clear()
+    return myWorld.world()
+
 
 if __name__ == "__main__":
     app.run()
